@@ -15,7 +15,7 @@ clear
 gum style "Choose which stage we are in"
 STAGE=$(gum choose bootstrap chroot)
 
-if [ $STAGE == "bootstrap" ] then
+if [ $STAGE == "bootstrap" ]; then
     clear
     gum style "Choose which root filesystem type you want"
     FS_TYPE=$(gum choose F2FS EXT4)
@@ -49,9 +49,9 @@ if [ $STAGE == "bootstrap" ] then
 
     # Create os partition and logical volumes
     cryptsetup -S 1 --label OS luksFormat ${DISK}3
-    cryptsetup luksOpen ${DISK}3 enc
-    pvcreate /dev/mapper/enc
-    vgcreate vg0 /dev/mapper/enc
+    cryptsetup luksOpen ${DISK}3 root
+    pvcreate /dev/mapper/root
+    vgcreate vg0 /dev/mapper/root
     lvcreate -L 2G vg0 -n SWAP
     lvcreate -L 100M vg0 -n VERITY_A
     lvcreate -L 5G vg0 -n ROOT_A
@@ -65,28 +65,27 @@ if [ $STAGE == "bootstrap" ] then
     swapon /dev/vg0/SWAP
 
     # Create partitions based on selected FS_TYPE and mount them
-    if [ $FS_TYPE == "F2FS" ] then
+    if [ $FS_TYPE == "F2FS" ]; then
         mkfs.f2fs -l HOME -O extra_attr,inode_checksum,sb_checksum,compression,encrypt /dev/vg0/HOME
         mkfs.f2fs -l VAR -O extra_attr,inode_checksum,sb_checksum,compression /dev/vg0/VAR
         mkfs.f2fs -l ROOT_A -O extra_attr,inode_checksum,sb_checksum,compression /dev/vg0/ROOT_A
         mkfs.f2fs -l ROOT_B -O extra_attr,inode_checksum,sb_checksum,compression /dev/vg0/ROOT_B
         mount -t f2fs -o compress_algorithm=zstd,compress_chksum,atgc,gc_merge,lazytime /dev/vg0/ROOT_A /mnt
-        mkdir /mnt/{boot,home,var}
+        mkdir /mnt/{efi,boot,home,var}
         mount -t f2fs -o compress_algorithm=zstd,compress_chksum,atgc,gc_merge,lazytime /dev/vg0/VAR /mnt/var
         mount -t f2fs -o compress_algorithm=zstd,compress_chksum,atgc,gc_merge,lazytime /dev/vg0/HOME /mnt/home
-    elif [ $FS_TYPE == "EXT4" ] then
+    elif [ $FS_TYPE == "EXT4" ]; then
         mkfs.ext4 -L HOME -O encrypt /dev/vg0/HOME
         mkfs.ext4 -L VAR -O encrypt /dev/vg0/VAR
         mkfs.ext4 -L ROOT_A -O encrypt /dev/vg0/ROOT_A
         mkfs.ext4 -L ROOT_B -O encrypt /dev/vg0/ROOT_B
         mount -t ext4 /dev/vg0/ROOT_A /mnt
-        mkdir /mnt/{boot,home,var}
+        mkdir /mnt/{efi,boot,home,var}
         mount -t ext4 /dev/vg0/VAR /mnt/var
         mount -t ext4 /dev/vg0/HOME /mnt/home
     fi # FS_TYPE select
     mount -t vfat LABEL=XBOOTLDR /mnt/boot
-    mkdir /mnt/boot/efi
-    mount -t vfat LABEL=EFI /mnt/boot/efi
+    mount -t vfat LABEL=EFI /mnt/efi
 
     # Bootstrap Arch Linux
     gum spin --title "Installing packages..." pacstrap -K /mnt base linux-hardened linux-firmware f2fs-tools cryptsetup lvm2 booster iwd efibootmgr efitools sbsigntools tpm2-tss apparmor nix gum
@@ -94,7 +93,7 @@ if [ $STAGE == "bootstrap" ] then
     # Create some final files before ending the bootstrap stage
     gum spin --title "Preparing a few system files..." sleep 3
     genfstab -U /mnt >> /mnt/etc/fstab
-    ln -sf /mnt/share/zoneinfo/Europe/Amsterdam /mnt/etc/localtime
+    ln -sf /mnt/usr/share/zoneinfo/Europe/Amsterdam /mnt/etc/localtime
     echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
     echo "KEYMAP=de-latin1" > /mnt/etc/vconsole.conf
     echo $HOST > /mnt/etc/hostname
